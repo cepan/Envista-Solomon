@@ -1,0 +1,91 @@
+"""
+Centralized camera capture that applies light settings + dwell, then captures.
+Use this everywhere instead of calling camera_service.capture() directly.
+"""
+
+import time
+from typing import Optional
+
+import cv2 as _cv2  # for optional saving
+
+from . import camera_service as _cam
+from . import light_controller as _lc
+from .config import state as _state
+
+
+def _apply_light(role: str) -> None:
+    """Best-effort: set the configured current on the single light (CH1) based
+    on role ('Top' uses Top mA, 'Front' uses Front mA). No revert; each capture
+    sets what it needs.
+    """
+    try:
+        st = _state()
+        ip = getattr(st, 'light_ip', None)
+        if not ip:
+            return
+        _lc.configure(ip)
+        # Single light only: always use channel 0 (CH1)
+        target = int(getattr(st, 'top_current_ma' if str(role).lower() == 'top' else 'front_current_ma', 0) or 0)
+        _lc.light_on(0)
+        _lc.set_current(0, target)
+    except Exception:
+        pass
+
+
+def capture(role: str, *, save_path: Optional[str] = None, dwell_ms: Optional[int] = None):
+    """Capture a frame from the specified role ('Top' or 'Front').
+
+    Steps:
+      1) Apply light (CH1 only) for the role.
+      2) Capture from the underlying camera_service.
+      4) Optionally save to disk.
+    """
+    # Apply light (read-back ensure is done inside light_controller)
+    _apply_light(role)
+    try:
+        st = _state()
+        default_ms = int(getattr(st, 'light_dwell_ms', None) or 100)
+    except Exception:
+        default_ms = 100
+    delay = default_ms if dwell_ms is None else int(dwell_ms)
+    if delay > 0:
+        time.sleep(delay / 1000.0)
+
+    # Capture
+    try:\n        from . import camera_service as _svc\n        _svc.flush(role, frames=2, timeout_ms=50)\n    except Exception:\n        pass\n    frame = _cam.capture(role)
+    try:
+        print(f"[Camera] role={role} captured", flush=True)
+    except Exception:
+        pass
+
+    # Optional save
+    if save_path:
+        try:
+            _cv2.imwrite(str(save_path), frame)
+        except Exception:
+            pass
+    return frame
+
+
+def is_connected(role: str) -> bool:
+    return _cam.is_connected(role)
+
+
+def connect(role: str, index: int) -> bool:
+    return _cam.connect(role, index)
+
+
+def disconnect(role: str) -> None:
+    _cam.disconnect(role)
+
+
+def enumerate_devices():
+    return _cam.enumerate_devices()
+
+
+def backend_name() -> str:
+    return _cam.backend_name()
+
+
+def diagnostics():
+    return _cam.diagnostics()

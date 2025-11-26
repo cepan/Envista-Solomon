@@ -1,0 +1,58 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.dll
+
+# Virtual environments
+envistaEnv/
+envistaEnv12/
+.venv/
+venv/
+env/
+
+# Packaging / build
+*.egg-info/
+.eggs/
+dist/
+build/
+*.manifest
+*.spec
+
+# Logs and temp files
+*.log
+*.tmp
+*.bak
+*.swp
+*.swo
+*.orig
+
+# IDE / editor
+.vscode/
+.idea/
+*.code-workspace
+
+# Test / coverage
+.pytest_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# App data
+user_settings.json
+AuthorityManagement.db
+
+# Large runtime assets
+captures/
+captures_extracted/
+
+# Model checkpoints
+*.pth
+*.pt

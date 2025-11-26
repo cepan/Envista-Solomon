@@ -1,0 +1,78 @@
+ False
+        self._img_path = path
+        self._path_label.setText(f"Image: {path}")
+        self._preview.setToolTip(path)
+        img = cv2.imread(path)
+        if img is None:
+            self._preview.setText("(could not load image)")
+            self._preview.setPixmap(QPixmap())
+            return False
+        self._set_preview(img)
+        return True
+
+    def params(self) -> dict:
+        return {
+            "method": self.combo_method.currentText(),
+            "blur": int(self.spin_blur.value()),
+            "morph": int(self.spin_morph.value()),
+            "morph_iter": int(self.spin_morph_iter.value()),
+            "approx_eps": float(self.spin_eps.value()),
+            "thresh_offset": float(self.spin_th_off.value()),
+            "canny1": float(self.spin_c1.value()),
+            "canny2": float(self.spin_c2.value()),
+            "arrow_len": float(self.spin_arrow.value()),
+        }
+
+    def _choose_image(self):
+        p, _ = QFileDialog.getOpenFileName(self, "Choose Image", "", "Images (*.png *.jpg *.bmp);;All Files (*.*)")
+        if p:
+            if not self.set_image_path(p):
+                self._preview.setText("(failed to load selected image)")
+
+    def _preview_contour(self):
+        if not self._img_path:
+            self._preview.setText("Choose an image first")
+            return
+        img = cv2.imread(self._img_path)
+        if img is None:
+            self._preview.setText("Failed to read image")
+            return
+        cnt = ct.extract_outer_contour(img, self.params())
+        vis = img.copy()
+        if cnt is not None and len(cnt) > 1:
+            pts = cnt.reshape(-1, 1, 2).astype(np.int32)
+            cv2.polylines(vis, [pts], isClosed=False, color=(255, 0, 0), thickness=2)
+        self._set_preview(vis)
+
+    def _apply_overlay(self):
+        # just emit accept; MainWindow will re-run overlay using these params
+        self.accept()
+
+    def _set_preview(self, bgr):
+        # Encode to PNG then load to QPixmap (avoids QImage stride issues)
+        ok, buf = cv2.imencode('.png', bgr)
+        if ok:
+            pm = QPixmap()
+            pm.loadFromData(buf.tobytes(), 'PNG')
+            self._preview.setPixmap(pm.scaled(self._preview.width(), self._preview.height(), Qt.KeepAspectRatio, transformMode=Qt.SmoothTransformation))
+        else:
+            self._preview.setText("Preview failed")
+
+
+# --- async helpers injected by Codex ---
+import threading
+
+def _to_qpixmap(bgr):
+    try:
+        import cv2
+        from PyQt5.QtGui import QImage, QPixmap
+        h, w = bgr.shape[:2]
+        rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+        qimg = QImage(rgb.data, w, h, rgb.strides[0], QImage.Format_RGB888)
+        return QPixmap.fromImage(qimg)
+    except Exception:
+        return None
+
+
+
+

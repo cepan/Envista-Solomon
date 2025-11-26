@@ -1,0 +1,88 @@
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QPixmap, QImage
+from PyQt5.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QComboBox, QSpinBox, QDoubleSpinBox, QGroupBox, QFormLayout, QFileDialog,
+)
+
+import cv2
+import numpy as np
+
+from services import contour_tools as ct
+
+
+class EdgeTunerDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Edge/Contour Tuner")
+        self.resize(900, 680)
+        self._img_path = None
+        self._path_label = QLabel("Image: (none)")
+        self._path_label.setStyleSheet("color: #ccc;")
+        self._preview = QLabel("Choose an image first")
+        self._preview.setAlignment(Qt.AlignCenter)
+        self._preview.setStyleSheet("background: #111;")
+
+        # Controls
+        frm = QFormLayout()
+        self.combo_method = QComboBox()
+        self.combo_method.addItems(["auto", "binary", "binary_inv", "canny"])
+        default_method = str(ct.DEFAULT_PARAMS.get("method", "auto")).lower()
+        idx = self.combo_method.findText(default_method) if default_method else -1
+        if idx >= 0:
+            self.combo_method.setCurrentIndex(idx)
+        frm.addRow("Method", self.combo_method)
+
+        self.spin_blur = QSpinBox(); self.spin_blur.setRange(1, 31); self.spin_blur.setSingleStep(2); self.spin_blur.setValue(int(ct.DEFAULT_PARAMS["blur"]))
+        frm.addRow("Blur (odd)", self.spin_blur)
+
+        self.spin_morph = QSpinBox(); self.spin_morph.setRange(1, 31); self.spin_morph.setValue(int(ct.DEFAULT_PARAMS["morph"]))
+        frm.addRow("Morph kernel", self.spin_morph)
+
+        self.spin_morph_iter = QSpinBox(); self.spin_morph_iter.setRange(0, 5); self.spin_morph_iter.setValue(int(ct.DEFAULT_PARAMS["morph_iter"]))
+        frm.addRow("Morph iter", self.spin_morph_iter)
+
+        self.spin_eps = QDoubleSpinBox(); self.spin_eps.setRange(0.0, 10.0); self.spin_eps.setDecimals(1); self.spin_eps.setValue(float(ct.DEFAULT_PARAMS["approx_eps"]))
+        frm.addRow("Approx eps", self.spin_eps)
+
+        self.spin_th_off = QDoubleSpinBox(); self.spin_th_off.setRange(-50.0, 50.0); self.spin_th_off.setDecimals(1); self.spin_th_off.setValue(float(ct.DEFAULT_PARAMS["thresh_offset"]))
+        frm.addRow("Thresh offset", self.spin_th_off)
+
+        self.spin_c1 = QDoubleSpinBox(); self.spin_c1.setRange(0.0, 400.0); self.spin_c1.setValue(float(ct.DEFAULT_PARAMS["canny1"]))
+        self.spin_c2 = QDoubleSpinBox(); self.spin_c2.setRange(0.0, 400.0); self.spin_c2.setValue(float(ct.DEFAULT_PARAMS["canny2"]))
+        frm.addRow("Canny (t1,t2)", self._hbox(self.spin_c1, self.spin_c2))
+
+        self.spin_arrow = QDoubleSpinBox(); self.spin_arrow.setRange(5.0, 200.0); self.spin_arrow.setValue(float(ct.DEFAULT_PARAMS["arrow_len"]))
+        frm.addRow("Arrow length", self.spin_arrow)
+
+        box = QGroupBox("Parameters"); box.setLayout(frm)
+
+        # Buttons
+        self.bt_open = QPushButton("Open Image…")
+        self.bt_preview = QPushButton("Preview Contour")
+        self.bt_apply = QPushButton("Apply To Overlay")
+        self.bt_ok = QPushButton("Close")
+        self.bt_ok.clicked.connect(self.accept)
+        self.bt_open.clicked.connect(self._choose_image)
+        self.bt_preview.clicked.connect(self._preview_contour)
+        self.bt_apply.clicked.connect(self._apply_overlay)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(box)
+        layout.addWidget(self._path_label)
+        layout.addWidget(self._preview, 1)
+        layout.addLayout(self._hbox(self.bt_open, self.bt_preview, self.bt_apply, self.bt_ok))
+
+    def _hbox(self, *widgets):
+        hb = QHBoxLayout()
+        for w in widgets:
+            hb.addWidget(w)
+        hb.addStretch(1)
+        return hb
+
+    def set_image_path(self, path: str) -> bool:
+        if not path:
+            self._path_label.setText("Image: (none)")
+            self._preview.setText("Choose an image first")
+            self._img_path = None
+            return

@@ -1,0 +1,113 @@
+*** Begin Patch
+*** Update File: ui/edge_tuner.py
+@@
+-from PyQt5.QtCore import Qt, QTimer
+-from PyQt5.QtGui import QPixmap
++from PyQt5.QtCore import Qt, QTimer
++from PyQt5.QtGui import QPixmap, QImage
+@@
+-import cv2
++import cv2
+ import numpy as np
++import threading
+@@
+-    def set_image_path(self, path: str) -> bool:
+-        if not path:
+-            self._path_label.setText("Image: (none)")
+-            self._preview.setText("Choose an image first")
+-            self._img_path = None
+-            return False
+-        self._img_path = path
+-        self._path_label.setText(f"Image: {path}")
+-        self._preview.setToolTip(path)
+-        img = cv2.imread(path)
+-        if img is None:
+-            self._preview.setText("(could not load image)")
+-            self._preview.setPixmap(QPixmap())
+-            return False
+-        self._set_preview(img)
+-        return True
++    def set_image_path(self, path: str) -> bool:
++        if not path:
++            self._path_label.setText("Image: (none)")
++            self._preview.setText("Choose an image first")
++            self._img_path = None
++            return False
++        self._img_path = path
++        self._path_label.setText(f"Image: {path}")
++        self._preview.setToolTip(path)
++        # Load preview asynchronously to avoid UI stalls
++        self._preview.setText("Loading image…")
++        def worker():
++            img = None
++            try:
++                img = cv2.imread(path)
++            except Exception:
++                img = None
++            def apply():
++                if img is None:
++                    self._preview.setText("(could not load image)")
++                    self._preview.setPixmap(QPixmap())
++                else:
++                    self._set_preview(img)
++            QTimer.singleShot(0, apply)
++        threading.Thread(target=worker, daemon=True).start()
++        return True
+@@
+-    def _preview_contour(self):
+-        if not self._img_path:
+-            self._preview.setText("Choose an image first")
+-            return
+-        img = cv2.imread(self._img_path)
+-        if img is None:
+-            self._preview.setText("Failed to read image")
+-            return
+-        cnt = ct.extract_outer_contour(img, self.params())
+-        vis = img.copy()
+-        if cnt is not None and len(cnt) > 1:
+-            pts = cnt.reshape(-1, 1, 2).astype(np.int32)
+-            cv2.polylines(vis, [pts], isClosed=False, color=(255, 0, 0), thickness=2)
+-        self._set_preview(vis)
++    def _preview_contour(self):
++        if not self._img_path:
++            self._preview.setText("Choose an image first")
++            return
++        self._preview.setText("Rendering contour…")
++        path = self._img_path
++        params = self.params()
++        def worker():
++            try:
++                img = cv2.imread(path)
++                if img is None:
++                    raise RuntimeError("Failed to read image")
++                cnt = ct.extract_outer_contour(img, params)
++                vis = img.copy()
++                if cnt is not None and len(cnt) > 1:
++                    pts = cnt.reshape(-1, 1, 2).astype(np.int32)
++                    cv2.polylines(vis, [pts], isClosed=False, color=(255, 0, 0), thickness=2)
++                QTimer.singleShot(0, lambda: self._set_preview(vis))
++            except Exception as ex:
++                QTimer.singleShot(0, lambda: self._preview.setText(f"Preview failed: {ex}"))
++        threading.Thread(target=worker, daemon=True).start()
+@@
+-    def _set_preview(self, bgr):
+-        # Encode to PNG then load to QPixmap (avoids QImage stride issues)
+-        ok, buf = cv2.imencode('.png', bgr)
+-        if ok:
+-            pm = QPixmap()
+-            pm.loadFromData(buf.tobytes(), 'PNG')
+-            self._preview.setPixmap(pm.scaled(self._preview.width(), self._preview.height(), Qt.KeepAspectRatio, transformMode=Qt.SmoothTransformation))
+-        else:
+-            self._preview.setText("Preview failed")
++    def _set_preview(self, bgr):
++        try:
++            rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
++            h, w = rgb.shape[:2]
++            qi = QImage(rgb.data, w, h, rgb.strides[0], QImage.Format_RGB888)
++            pm = QPixmap.fromImage(qi)
++            wlbl = max(1, self._preview.width())
++            hlbl = max(1, self._preview.height())
++            self._preview.setPixmap(pm.scaled(wlbl, hlbl, Qt.KeepAspectRatio, transformMode=Qt.FastTransformation))
++        except Exception as ex:
++            self._preview.setText(f"Preview failed: {ex}")
+*** End Patch
