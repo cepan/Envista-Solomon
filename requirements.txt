@@ -1,0 +1,28 @@
+# Core UI Framework
+PyQt5>=5.15.0
+
+# Computer Vision and Image Processing
+opencv-python>=4.5.0
+numpy>=1.20.0
+
+# Deep Learning Framework (CUDA 12.6 compatible)
+# Install from: https://download.pytorch.org/whl/cu126
+torch==2.7.1
+torchvision==0.22.1
+torchaudio==2.7.1
+
+# Object Detection Framework
+# Install from: https://miropsota.github.io/torch_packages_builder/detectron2/
+# detectron2==0.6+18f6958pt2.7.1cu126
+
+# Hardware Communication
+pyserial>=3.5
+
+# Optional Camera Backends
+# pypylon  # For Basler cameras - install separately if needed
+# Note: iRAYPLE/MindVision SDK must be installed separately from vendor
+
+# Development/Testing (optional)
+# pytest
+# black
+# flake8
